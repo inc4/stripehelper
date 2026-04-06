@@ -1,4 +1,4 @@
-module stripehelper
+module github.com/inc4/stripehelper
 
 go 1.25.7
 
