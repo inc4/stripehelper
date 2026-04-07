@@ -16,6 +16,18 @@ import (
 
 type EventHandler func(w *WebhookContext)
 
+type IStripeHelper interface {
+	GetPrice(priceID string) (*stripe.Price, error)
+	GetPrices(priceType string) []*stripe.Price
+	GetPricesWrapped(priceType string) []StripePricesResponse
+	GetCustomer(id string, params *stripe.CustomerParams) (*stripe.Customer, error)
+	DeleteCustomer(id string, params *stripe.CustomerParams) error
+	CreateCustomerWithEmail(email string, metadata map[string]string) (*stripe.Customer, error)
+	GetSession(sessionID string) (*stripe.CheckoutSession, error)
+	AddEventHandler(eventType stripe.EventType, handler EventHandler)
+	Webhook(w http.ResponseWriter, req *http.Request)
+}
+
 type StripeHelper struct {
 	webhookSecret string
 	key           string
