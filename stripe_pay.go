@@ -24,7 +24,7 @@ type IStripeHelper interface {
 	DeleteCustomer(id string, params *stripe.CustomerParams) error
 	CreateCustomerWithEmail(email string, metadata map[string]string) (*stripe.Customer, error)
 	GetSession(sessionID string) (*stripe.CheckoutSession, error)
-	AddEventHandler(eventType stripe.EventType, handler EventHandler)
+	AddEventHandler(eventType stripe.EventType, handlers ...EventHandler)
 	Webhook(w http.ResponseWriter, req *http.Request)
 }
 
@@ -76,13 +76,14 @@ func (s *StripeHelper) GetSession(sessionID string) (*stripe.CheckoutSession, er
 	return session.Get(sessionID, &stripe.CheckoutSessionParams{})
 }
 
-func (s *StripeHelper) AddEventHandler(eventType stripe.EventType, handler EventHandler) {
-	list, ok := s.handlers[eventType]
+func (s *StripeHelper) AddEventHandler(eventType stripe.EventType, handlers ...EventHandler) {
+	_, ok := s.handlers[eventType]
 	if !ok {
-		s.handlers[eventType] = []EventHandler{handler}
-		return
+		s.handlers[eventType] = []EventHandler{}
 	}
-	s.handlers[eventType] = append(list, handler)
+	for _, handler := range handlers {
+		s.handlers[eventType] = append(s.handlers[eventType], handler)
+	}
 }
 
 func (s *StripeHelper) Webhook(w http.ResponseWriter, req *http.Request) {
