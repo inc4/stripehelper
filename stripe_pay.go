@@ -23,6 +23,7 @@ type IStripeHelper interface {
 	GetCustomer(id string, params *stripe.CustomerParams) (*stripe.Customer, error)
 	DeleteCustomer(id string, params *stripe.CustomerParams) error
 	CreateCustomerWithEmail(email string, metadata map[string]string) (*stripe.Customer, error)
+	CreateCustomer(params *stripe.CustomerParams) (*stripe.Customer, error)
 	GetSession(sessionID string) (*stripe.CheckoutSession, error)
 	AddEventHandler(eventType stripe.EventType, handlers ...EventHandler)
 	Webhook(w http.ResponseWriter, req *http.Request)
@@ -65,10 +66,18 @@ func (s *StripeHelper) DeleteCustomer(id string, params *stripe.CustomerParams) 
 
 // CreateCustomer creates a new customer.
 func (s *StripeHelper) CreateCustomerWithEmail(email string, metadata map[string]string) (*stripe.Customer, error) {
-	return customer.New(&stripe.CustomerParams{
+	return s.CreateCustomer(&stripe.CustomerParams{
 		Email:    stripe.String(email),
 		Metadata: metadata,
 	})
+}
+
+// CreateCustomer creates a new customer.
+func (s *StripeHelper) CreateCustomer(params *stripe.CustomerParams) (*stripe.Customer, error) {
+	if params == nil {
+		params = &stripe.CustomerParams{}
+	}
+	return customer.New(params)
 }
 
 // GetSession returns the details of the checkout session.
