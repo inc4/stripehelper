@@ -35,15 +35,15 @@ type StripePricesResponse struct {
 	Metadata        map[string]string `json:"metadata"`
 }
 
-func (s *StripeHelper) GetPricesWrapped(priceType string) []StripePricesResponse {
+func (s *StripeHelper) GetPricesMap(priceType string) map[string]StripePricesResponse {
 	if priceType == "" {
 		priceType = "recurring"
 	}
 	prices := s.GetPrices(priceType)
 
-	pricesResponse := make([]StripePricesResponse, 0)
+	pricesResponse := make(map[string]StripePricesResponse, len(prices))
 	for _, p := range prices {
-		price := StripePricesResponse{
+		resp := StripePricesResponse{
 			PriceID:     p.ID,
 			UnitAmount:  p.UnitAmount,
 			Active:      p.Active,
@@ -55,11 +55,11 @@ func (s *StripeHelper) GetPricesWrapped(priceType string) []StripePricesResponse
 			Metadata:    p.Metadata,
 		}
 		if p.Recurring != nil {
-			price.Interval = string(p.Recurring.Interval)
-			price.IntervalCount = p.Recurring.IntervalCount
-			price.TrialPeriodDays = p.Recurring.TrialPeriodDays
+			resp.Interval = string(p.Recurring.Interval)
+			resp.IntervalCount = p.Recurring.IntervalCount
+			resp.TrialPeriodDays = p.Recurring.TrialPeriodDays
 		}
-		pricesResponse = append(pricesResponse, price)
+		pricesResponse[p.ID] = resp
 	}
 	return pricesResponse
 }

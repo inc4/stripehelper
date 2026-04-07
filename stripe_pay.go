@@ -19,7 +19,7 @@ type EventHandler func(w *WebhookContext)
 type IStripeHelper interface {
 	GetPrice(priceID string) (*stripe.Price, error)
 	GetPrices(priceType string) []*stripe.Price
-	GetPricesWrapped(priceType string) []StripePricesResponse
+	GetPricesMap(priceType string) map[string]StripePricesResponse
 	GetCustomer(id string, params *stripe.CustomerParams) (*stripe.Customer, error)
 	DeleteCustomer(id string, params *stripe.CustomerParams) error
 	CreateCustomerWithEmail(email string, metadata map[string]string) (*stripe.Customer, error)
