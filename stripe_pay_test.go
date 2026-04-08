@@ -297,6 +297,111 @@ func TestDataExtractors(t *testing.T) {
 	})
 }
 
+func TestGetCustomerSubscriptions(t *testing.T) {
+	t.Run("returns subscriptions for customer", func(t *testing.T) {
+		// Mock Stripe API server
+		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if r.URL.Path != "/v1/subscriptions" {
+				t.Fatalf("unexpected path: %s", r.URL.Path)
+			}
+			if r.URL.Query().Get("customer") != "cus_123" {
+				t.Fatalf("expected customer=cus_123, got %s", r.URL.Query().Get("customer"))
+			}
+			if r.URL.Query().Get("status") != "active" {
+				t.Fatalf("expected status=active, got %s", r.URL.Query().Get("status"))
+			}
+			resp := map[string]any{
+				"object":   "list",
+				"has_more": false,
+				"data": []map[string]any{
+					{"id": "sub_1", "object": "subscription", "status": "active", "customer": "cus_123"},
+					{"id": "sub_2", "object": "subscription", "status": "active", "customer": "cus_123"},
+				},
+			}
+			w.Header().Set("Content-Type", "application/json")
+			json.NewEncoder(w).Encode(resp)
+		}))
+		defer server.Close()
+
+		// Override stripe backend
+		backend := stripe.GetBackendWithConfig(stripe.APIBackend, &stripe.BackendConfig{
+			URL: stripe.String(server.URL),
+		})
+		stripe.SetBackend(stripe.APIBackend, backend)
+		defer stripe.SetBackend(stripe.APIBackend, nil)
+
+		sh := NewStripeHelper("sk_test_123", "whsec_test")
+		subs, err := sh.GetCustomerSubscriptions("cus_123")
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if len(subs) != 2 {
+			t.Fatalf("expected 2 subscriptions, got %d", len(subs))
+		}
+		if subs[0].ID != "sub_1" {
+			t.Fatalf("expected first sub ID %q, got %q", "sub_1", subs[0].ID)
+		}
+		if subs[1].ID != "sub_2" {
+			t.Fatalf("expected second sub ID %q, got %q", "sub_2", subs[1].ID)
+		}
+	})
+
+	t.Run("returns empty slice for customer with no subscriptions", func(t *testing.T) {
+		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			resp := map[string]any{
+				"object":   "list",
+				"has_more": false,
+				"data":     []map[string]any{},
+			}
+			w.Header().Set("Content-Type", "application/json")
+			json.NewEncoder(w).Encode(resp)
+		}))
+		defer server.Close()
+
+		backend := stripe.GetBackendWithConfig(stripe.APIBackend, &stripe.BackendConfig{
+			URL: stripe.String(server.URL),
+		})
+		stripe.SetBackend(stripe.APIBackend, backend)
+		defer stripe.SetBackend(stripe.APIBackend, nil)
+
+		sh := NewStripeHelper("sk_test_123", "whsec_test")
+		subs, err := sh.GetCustomerSubscriptions("cus_empty")
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if len(subs) != 0 {
+			t.Fatalf("expected 0 subscriptions, got %d", len(subs))
+		}
+	})
+
+	t.Run("returns error on API failure", func(t *testing.T) {
+		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.WriteHeader(http.StatusInternalServerError)
+			resp := map[string]any{
+				"error": map[string]any{
+					"type":    "api_error",
+					"message": "internal server error",
+				},
+			}
+			json.NewEncoder(w).Encode(resp)
+		}))
+		defer server.Close()
+
+		backend := stripe.GetBackendWithConfig(stripe.APIBackend, &stripe.BackendConfig{
+			URL:            stripe.String(server.URL),
+			MaxNetworkRetries: stripe.Int64(0),
+		})
+		stripe.SetBackend(stripe.APIBackend, backend)
+		defer stripe.SetBackend(stripe.APIBackend, nil)
+
+		sh := NewStripeHelper("sk_test_123", "whsec_test")
+		_, err := sh.GetCustomerSubscriptions("cus_fail")
+		if err == nil {
+			t.Fatal("expected error, got nil")
+		}
+	})
+}
+
 func TestIsAborted(t *testing.T) {
 	t.Run("returns false when not aborted", func(t *testing.T) {
 		ctx := &WebhookContext{}

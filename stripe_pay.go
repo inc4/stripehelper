@@ -2,6 +2,7 @@ package stripehelper
 
 import (
 	"encoding/json"
+	"fmt"
 	"io"
 	"log"
 	"log/slog"
@@ -11,6 +12,7 @@ import (
 	"github.com/stripe/stripe-go/v85/checkout/session"
 	"github.com/stripe/stripe-go/v85/customer"
 	"github.com/stripe/stripe-go/v85/price"
+	"github.com/stripe/stripe-go/v85/subscription"
 	"github.com/stripe/stripe-go/v85/webhook"
 )
 
@@ -83,6 +85,24 @@ func (s *StripeHelper) CreateCustomer(params *stripe.CustomerParams) (*stripe.Cu
 // GetSession returns the details of the checkout session.
 func (s *StripeHelper) GetSession(sessionID string) (*stripe.CheckoutSession, error) {
 	return session.Get(sessionID, &stripe.CheckoutSessionParams{})
+}
+
+func (s *StripeHelper) GetCustomerSubscriptions(customerId string) ([]*stripe.Subscription, error) {
+	subs := make([]*stripe.Subscription, 0)
+
+	params := &stripe.SubscriptionListParams{
+		Customer: stripe.String(customerId),
+	}
+	params.Filters.AddFilter("status", "", "active") // Optional: filter by active subscriptions
+
+	iter := subscription.List(params)
+	for iter.Next() {
+		subs = append(subs, iter.Subscription())
+	}
+	if err := iter.Err(); err != nil {
+		return subs, fmt.Errorf("failed to list subscriptions: %v", err)
+	}
+	return subs, nil
 }
 
 func (s *StripeHelper) AddEventHandler(eventType stripe.EventType, handlers ...EventHandler) {
