@@ -27,6 +27,7 @@ type IStripeHelper interface {
 	CreateCustomerWithEmail(email string, metadata map[string]string) (*stripe.Customer, error)
 	CreateCustomer(params *stripe.CustomerParams) (*stripe.Customer, error)
 	GetSession(sessionID string) (*stripe.CheckoutSession, error)
+	GetCustomerSubscriptions(customerId string) ([]*stripe.Subscription, error)
 	AddEventHandler(eventType stripe.EventType, handlers ...EventHandler)
 	Webhook(w http.ResponseWriter, req *http.Request)
 }
