@@ -1,7 +1,7 @@
 package stripehelper
 
 import (
-	"encoding/json"
+	"context"
 	"fmt"
 	"io"
 	"log"
@@ -9,25 +9,21 @@ import (
 	"net/http"
 
 	"github.com/stripe/stripe-go/v85"
-	"github.com/stripe/stripe-go/v85/checkout/session"
-	"github.com/stripe/stripe-go/v85/customer"
-	"github.com/stripe/stripe-go/v85/price"
-	"github.com/stripe/stripe-go/v85/subscription"
-	"github.com/stripe/stripe-go/v85/webhook"
 )
 
 type EventHandler func(w *WebhookContext)
 
 type IStripeHelper interface {
-	GetPrice(priceID string) (*stripe.Price, error)
-	GetPrices(priceType string) []*stripe.Price
-	GetPricesMap(priceType string) map[string]StripePricesResponse
-	GetCustomer(id string, params *stripe.CustomerParams) (*stripe.Customer, error)
-	DeleteCustomer(id string, params *stripe.CustomerParams) error
-	CreateCustomerWithEmail(email string, metadata map[string]string) (*stripe.Customer, error)
-	CreateCustomer(params *stripe.CustomerParams) (*stripe.Customer, error)
-	GetSession(sessionID string) (*stripe.CheckoutSession, error)
-	GetCustomerSubscriptions(customerId string) ([]*stripe.Subscription, error)
+	GetPrice(ctx context.Context, priceID string) (*stripe.Price, error)
+	GetPrices(ctx context.Context, priceType string) []*stripe.Price
+	GetPricesMap(ctx context.Context, priceType string) map[string]StripePricesResponse
+	GetCustomer(ctx context.Context, id string, params *stripe.CustomerRetrieveParams) (*stripe.Customer, error)
+	DeleteCustomer(ctx context.Context, id string, params *stripe.CustomerDeleteParams) error
+	CreateCustomerWithEmail(ctx context.Context, email string, metadata map[string]string) (*stripe.Customer, error)
+	CreateCustomer(ctx context.Context, params *stripe.CustomerCreateParams) (*stripe.Customer, error)
+	GetSession(ctx context.Context, sessionID string) (*stripe.CheckoutSession, error)
+	GetCustomerSubscriptions(ctx context.Context, customerId string) ([]*stripe.Subscription, error)
+	GetCustomerSubscriptionsMap(ctx context.Context, customerId string) (map[string]*stripe.Subscription, error)
 	AddEventHandler(eventType stripe.EventType, handlers ...EventHandler)
 	Webhook(w http.ResponseWriter, req *http.Request)
 }
@@ -36,11 +32,12 @@ type StripeHelper struct {
 	webhookSecret string
 	key           string
 	handlers      map[stripe.EventType][]EventHandler
+	sc            *stripe.Client
 }
 
 func NewStripeHelper(key, webhookSecret string) *StripeHelper {
-	stripe.Key = key
 	return &StripeHelper{
+		sc:            stripe.NewClient(key),
 		key:           key,
 		webhookSecret: webhookSecret,
 		handlers:      make(map[stripe.EventType][]EventHandler),
@@ -48,60 +45,76 @@ func NewStripeHelper(key, webhookSecret string) *StripeHelper {
 }
 
 // GetPrice returns the price details.
-func (a *StripeHelper) GetPrice(priceID string) (*stripe.Price, error) {
-	return price.Get(priceID, &stripe.PriceParams{})
+func (s *StripeHelper) GetPrice(ctx context.Context, priceID string) (*stripe.Price, error) {
+	return s.sc.V1Prices.Retrieve(ctx, priceID, &stripe.PriceRetrieveParams{})
 }
 
-func (s *StripeHelper) GetCustomer(id string, params *stripe.CustomerParams) (*stripe.Customer, error) {
+func (s *StripeHelper) GetCustomer(ctx context.Context, id string, params *stripe.CustomerRetrieveParams) (*stripe.Customer, error) {
 	if params == nil {
-		params = &stripe.CustomerParams{}
+		params = &stripe.CustomerRetrieveParams{}
 	}
-	return customer.Get(id, params)
+	return s.sc.V1Customers.Retrieve(ctx, id, params)
 }
 
-func (s *StripeHelper) DeleteCustomer(id string, params *stripe.CustomerParams) error {
+func (s *StripeHelper) DeleteCustomer(ctx context.Context, id string, params *stripe.CustomerDeleteParams) error {
 	if params == nil {
-		params = &stripe.CustomerParams{}
+		params = &stripe.CustomerDeleteParams{}
 	}
-	_, err := customer.Del(id, params)
+	_, err := s.sc.V1Customers.Delete(ctx, id, params)
 	return err
 }
 
-// CreateCustomer creates a new customer.
-func (s *StripeHelper) CreateCustomerWithEmail(email string, metadata map[string]string) (*stripe.Customer, error) {
-	return s.CreateCustomer(&stripe.CustomerParams{
+// CreateCustomerWithEmail creates a new customer with email and metadata.
+func (s *StripeHelper) CreateCustomerWithEmail(ctx context.Context, email string, metadata map[string]string) (*stripe.Customer, error) {
+	return s.CreateCustomer(ctx, &stripe.CustomerCreateParams{
 		Email:    stripe.String(email),
 		Metadata: metadata,
 	})
 }
 
 // CreateCustomer creates a new customer.
-func (s *StripeHelper) CreateCustomer(params *stripe.CustomerParams) (*stripe.Customer, error) {
+func (s *StripeHelper) CreateCustomer(ctx context.Context, params *stripe.CustomerCreateParams) (*stripe.Customer, error) {
 	if params == nil {
-		params = &stripe.CustomerParams{}
+		params = &stripe.CustomerCreateParams{}
 	}
-	return customer.New(params)
+	return s.sc.V1Customers.Create(ctx, params)
 }
 
 // GetSession returns the details of the checkout session.
-func (s *StripeHelper) GetSession(sessionID string) (*stripe.CheckoutSession, error) {
-	return session.Get(sessionID, &stripe.CheckoutSessionParams{})
+func (s *StripeHelper) GetSession(ctx context.Context, sessionID string) (*stripe.CheckoutSession, error) {
+	return s.sc.V1CheckoutSessions.Retrieve(ctx, sessionID, &stripe.CheckoutSessionRetrieveParams{})
 }
 
-func (s *StripeHelper) GetCustomerSubscriptions(customerId string) ([]*stripe.Subscription, error) {
+func (s *StripeHelper) GetCustomerSubscriptions(ctx context.Context, customerId string) ([]*stripe.Subscription, error) {
 	subs := make([]*stripe.Subscription, 0)
 
 	params := &stripe.SubscriptionListParams{
 		Customer: stripe.String(customerId),
+		Status:   stripe.String("active"),
 	}
-	params.Filters.AddFilter("status", "", "active") // Optional: filter by active subscriptions
 
-	iter := subscription.List(params)
-	for iter.Next() {
-		subs = append(subs, iter.Subscription())
+	for sub, err := range s.sc.V1Subscriptions.List(ctx, params).All(ctx) {
+		if err != nil {
+			return subs, fmt.Errorf("failed to list subscriptions: %v", err)
+		}
+		subs = append(subs, sub)
 	}
-	if err := iter.Err(); err != nil {
-		return subs, fmt.Errorf("failed to list subscriptions: %v", err)
+	return subs, nil
+}
+
+func (s *StripeHelper) GetCustomerSubscriptionsMap(ctx context.Context, customerId string) (map[string]*stripe.Subscription, error) {
+	subs := make(map[string]*stripe.Subscription)
+
+	params := &stripe.SubscriptionListParams{
+		Customer: stripe.String(customerId),
+		Status:   stripe.String("active"),
+	}
+
+	for sub, err := range s.sc.V1Subscriptions.List(ctx, params).All(ctx) {
+		if err != nil {
+			return subs, fmt.Errorf("failed to list subscriptions: %v", err)
+		}
+		subs[sub.ID] = sub
 	}
 	return subs, nil
 }
@@ -126,15 +139,7 @@ func (s *StripeHelper) Webhook(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	event := stripe.Event{}
-
-	if err := json.Unmarshal(payload, &event); err != nil {
-		slog.Error("Failed to parse webhook body json", slog.Any("error", err))
-		w.WriteHeader(http.StatusBadRequest)
-		return
-	}
-
-	event, err = webhook.ConstructEvent(payload, req.Header.Get("Stripe-Signature"), s.webhookSecret)
+	event, err := s.sc.ConstructEvent(payload, req.Header.Get("Stripe-Signature"), s.webhookSecret)
 	if err != nil {
 		slog.Error("Webhook signature verification failed.", slog.Any("error", err))
 		w.WriteHeader(http.StatusBadRequest) // Return a 400 error on a bad signature

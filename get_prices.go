@@ -1,20 +1,22 @@
 package stripehelper
 
 import (
+	"context"
+
 	"github.com/stripe/stripe-go/v85"
-	"github.com/stripe/stripe-go/v85/price"
 )
 
 // GetPrices returns a list of prices.
-func (s *StripeHelper) GetPrices(priceType string) []*stripe.Price {
+func (s *StripeHelper) GetPrices(ctx context.Context, priceType string) []*stripe.Price {
 	prices := make([]*stripe.Price, 0)
 
-	priceList := price.List(&stripe.PriceListParams{
+	for p, err := range s.sc.V1Prices.List(ctx, &stripe.PriceListParams{
 		Type: stripe.String(priceType),
-	})
-
-	for priceList.Next() {
-		prices = append(prices, priceList.Price())
+	}).All(ctx) {
+		if err != nil {
+			break
+		}
+		prices = append(prices, p)
 	}
 
 	return prices
@@ -35,11 +37,11 @@ type StripePricesResponse struct {
 	Metadata        map[string]string `json:"metadata"`
 }
 
-func (s *StripeHelper) GetPricesMap(priceType string) map[string]StripePricesResponse {
+func (s *StripeHelper) GetPricesMap(ctx context.Context, priceType string) map[string]StripePricesResponse {
 	if priceType == "" {
 		priceType = "recurring"
 	}
-	prices := s.GetPrices(priceType)
+	prices := s.GetPrices(ctx, priceType)
 
 	pricesResponse := make(map[string]StripePricesResponse, len(prices))
 	for _, p := range prices {

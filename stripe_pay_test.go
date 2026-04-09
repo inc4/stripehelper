@@ -2,6 +2,7 @@ package stripehelper
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -10,6 +11,19 @@ import (
 
 	"github.com/stripe/stripe-go/v85"
 )
+
+func newTestHelper(serverURL string) *StripeHelper {
+	backends := stripe.NewBackendsWithConfig(&stripe.BackendConfig{
+		URL: stripe.String(serverURL),
+	})
+	sc := stripe.NewClient("sk_test_123", stripe.WithBackends(backends))
+	return &StripeHelper{
+		sc:            sc,
+		key:           "sk_test_123",
+		webhookSecret: "whsec_test",
+		handlers:      make(map[stripe.EventType][]EventHandler),
+	}
+}
 
 func TestNewStripeHelper(t *testing.T) {
 	sh := NewStripeHelper("sk_test_123", "whsec_456")
@@ -299,7 +313,6 @@ func TestDataExtractors(t *testing.T) {
 
 func TestGetCustomerSubscriptions(t *testing.T) {
 	t.Run("returns subscriptions for customer", func(t *testing.T) {
-		// Mock Stripe API server
 		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			if r.URL.Path != "/v1/subscriptions" {
 				t.Fatalf("unexpected path: %s", r.URL.Path)
@@ -323,15 +336,8 @@ func TestGetCustomerSubscriptions(t *testing.T) {
 		}))
 		defer server.Close()
 
-		// Override stripe backend
-		backend := stripe.GetBackendWithConfig(stripe.APIBackend, &stripe.BackendConfig{
-			URL: stripe.String(server.URL),
-		})
-		stripe.SetBackend(stripe.APIBackend, backend)
-		defer stripe.SetBackend(stripe.APIBackend, nil)
-
-		sh := NewStripeHelper("sk_test_123", "whsec_test")
-		subs, err := sh.GetCustomerSubscriptions("cus_123")
+		sh := newTestHelper(server.URL)
+		subs, err := sh.GetCustomerSubscriptions(context.Background(), "cus_123")
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -358,14 +364,8 @@ func TestGetCustomerSubscriptions(t *testing.T) {
 		}))
 		defer server.Close()
 
-		backend := stripe.GetBackendWithConfig(stripe.APIBackend, &stripe.BackendConfig{
-			URL: stripe.String(server.URL),
-		})
-		stripe.SetBackend(stripe.APIBackend, backend)
-		defer stripe.SetBackend(stripe.APIBackend, nil)
-
-		sh := NewStripeHelper("sk_test_123", "whsec_test")
-		subs, err := sh.GetCustomerSubscriptions("cus_empty")
+		sh := newTestHelper(server.URL)
+		subs, err := sh.GetCustomerSubscriptions(context.Background(), "cus_empty")
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -387,15 +387,8 @@ func TestGetCustomerSubscriptions(t *testing.T) {
 		}))
 		defer server.Close()
 
-		backend := stripe.GetBackendWithConfig(stripe.APIBackend, &stripe.BackendConfig{
-			URL:            stripe.String(server.URL),
-			MaxNetworkRetries: stripe.Int64(0),
-		})
-		stripe.SetBackend(stripe.APIBackend, backend)
-		defer stripe.SetBackend(stripe.APIBackend, nil)
-
-		sh := NewStripeHelper("sk_test_123", "whsec_test")
-		_, err := sh.GetCustomerSubscriptions("cus_fail")
+		sh := newTestHelper(server.URL)
+		_, err := sh.GetCustomerSubscriptions(context.Background(), "cus_fail")
 		if err == nil {
 			t.Fatal("expected error, got nil")
 		}
