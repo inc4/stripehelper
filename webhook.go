@@ -7,7 +7,7 @@ import (
 	"io"
 	"net/http"
 
-	"github.com/stripe/stripe-go/v85"
+	"github.com/stripe/stripe-go/v84"
 )
 
 type WebhookContext struct {

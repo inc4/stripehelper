@@ -9,7 +9,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/stripe/stripe-go/v85"
+	"github.com/stripe/stripe-go/v84"
 )
 
 func newTestHelper(serverURL string) *StripeHelper {

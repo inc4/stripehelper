@@ -8,7 +8,7 @@ import (
 	"log/slog"
 	"net/http"
 
-	"github.com/stripe/stripe-go/v85"
+	"github.com/stripe/stripe-go/v84"
 )
 
 type EventHandler func(w *WebhookContext)
@@ -118,7 +118,7 @@ func (s *StripeHelper) GetCustomerSubscriptions(ctx context.Context, customerId 
 		Status:   stripe.String("active"),
 	}
 
-	for sub, err := range s.sc.V1Subscriptions.List(ctx, params).All(ctx) {
+	for sub, err := range s.sc.V1Subscriptions.List(ctx, params) {
 		if err != nil {
 			return subs, fmt.Errorf("failed to list subscriptions: %v", err)
 		}
@@ -135,7 +135,7 @@ func (s *StripeHelper) GetCustomerSubscriptionsMap(ctx context.Context, customer
 		Status:   stripe.String("active"),
 	}
 
-	for sub, err := range s.sc.V1Subscriptions.List(ctx, params).All(ctx) {
+	for sub, err := range s.sc.V1Subscriptions.List(ctx, params) {
 		if err != nil {
 			return subs, fmt.Errorf("failed to list subscriptions: %v", err)
 		}

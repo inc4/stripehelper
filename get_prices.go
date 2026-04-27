@@ -3,7 +3,7 @@ package stripehelper
 import (
 	"context"
 
-	"github.com/stripe/stripe-go/v85"
+	"github.com/stripe/stripe-go/v84"
 )
 
 // GetPrices returns a list of prices.
@@ -12,7 +12,7 @@ func (s *StripeHelper) GetPrices(ctx context.Context, priceType string) []*strip
 
 	for p, err := range s.sc.V1Prices.List(ctx, &stripe.PriceListParams{
 		Type: stripe.String(priceType),
-	}).All(ctx) {
+	}) {
 		if err != nil {
 			break
 		}

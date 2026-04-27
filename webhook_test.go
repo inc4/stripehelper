@@ -7,7 +7,7 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"github.com/stripe/stripe-go/v85"
+	"github.com/stripe/stripe-go/v84"
 )
 
 func TestGetRawData(t *testing.T) {
