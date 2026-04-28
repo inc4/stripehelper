@@ -21,7 +21,7 @@ type IStripeHelper interface {
 	DeleteCustomer(ctx context.Context, id string, params *stripe.CustomerDeleteParams) error
 	CreateCustomerWithEmail(ctx context.Context, email string, metadata map[string]string) (*stripe.Customer, error)
 	CreateCustomer(ctx context.Context, params *stripe.CustomerCreateParams) (*stripe.Customer, error)
-	CreateCheckoutSessionForSubscription(ctx context.Context, priceID, successURL, cancelURL string, metadata map[string]string) (*stripe.CheckoutSession, error)
+	CreateCheckoutSessionForSubscription(ctx context.Context, priceID, customerID, successURL, cancelURL string, metadata map[string]string) (*stripe.CheckoutSession, error)
 	CreateCheckoutSession(ctx context.Context, params *stripe.CheckoutSessionCreateParams) (*stripe.CheckoutSession, error)
 	GetSession(ctx context.Context, sessionID string) (*stripe.CheckoutSession, error)
 	GetCustomerSubscriptions(ctx context.Context, customerId string) ([]*stripe.Subscription, error)
@@ -84,7 +84,7 @@ func (s *StripeHelper) CreateCustomer(ctx context.Context, params *stripe.Custom
 
 func (s *StripeHelper) CreateCheckoutSessionForSubscription(
 	ctx context.Context,
-	priceID, successURL, cancelURL string,
+	priceID, customerID, successURL, cancelURL string,
 	metadata map[string]string) (*stripe.CheckoutSession, error) {
 	params := &stripe.CheckoutSessionCreateParams{
 		Mode: stripe.String(stripe.CheckoutSessionModeSubscription),
@@ -97,6 +97,9 @@ func (s *StripeHelper) CreateCheckoutSessionForSubscription(
 		Metadata:   metadata,
 		SuccessURL: stripe.String(successURL),
 		CancelURL:  stripe.String(cancelURL),
+	}
+	if customerID != "" {
+		params.Customer = stripe.String(customerID)
 	}
 	return s.CreateCheckoutSession(ctx, params)
 }
