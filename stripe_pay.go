@@ -26,7 +26,8 @@ type IStripeHelper interface {
 	GetSession(ctx context.Context, sessionID string) (*stripe.CheckoutSession, error)
 	GetCustomerSubscriptions(ctx context.Context, customerId string) ([]*stripe.Subscription, error)
 	GetCustomerSubscriptionsMap(ctx context.Context, customerId string) (map[string]*stripe.Subscription, error)
-	CancelSubscriptionAtPeriodEnd(ctx context.Context, customerId string) error
+	CancelAllSubscription(ctx context.Context, customerId string) error
+	CancelAllSubscriptionAtPeriodEnd(ctx context.Context, customerId string) error
 	AddEventHandler(eventType stripe.EventType, handlers ...EventHandler)
 	Webhook(w http.ResponseWriter, req *http.Request)
 }
