@@ -26,6 +26,7 @@ type IStripeHelper interface {
 	GetSession(ctx context.Context, sessionID string) (*stripe.CheckoutSession, error)
 	GetCustomerSubscriptions(ctx context.Context, customerId string) ([]*stripe.Subscription, error)
 	GetCustomerSubscriptionsMap(ctx context.Context, customerId string) (map[string]*stripe.Subscription, error)
+	CancelSubscriptionAtPeriodEnd(ctx context.Context, customerId string) error
 	AddEventHandler(eventType stripe.EventType, handlers ...EventHandler)
 	Webhook(w http.ResponseWriter, req *http.Request)
 }
@@ -193,4 +194,36 @@ func (s *StripeHelper) Webhook(w http.ResponseWriter, req *http.Request) {
 		handlers: handlerList,
 	}
 	webhookContext.Start()
+}
+
+func (s *StripeHelper) CancelAllSubscription(ctx context.Context, customerId string) error {
+	subs, err := s.GetCustomerSubscriptions(ctx, customerId)
+	if err != nil {
+		return err
+	}
+	for _, sub := range subs {
+		params := &stripe.SubscriptionCancelParams{}
+		_, err := s.sc.V1Subscriptions.Cancel(ctx, sub.ID, params)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (s *StripeHelper) CancelAllSubscriptionAtPeriodEnd(ctx context.Context, customerId string) error {
+	subs, err := s.GetCustomerSubscriptions(ctx, customerId)
+	if err != nil {
+		return err
+	}
+	for _, sub := range subs {
+		params := &stripe.SubscriptionUpdateParams{
+			CancelAtPeriodEnd: stripe.Bool(true),
+		}
+		_, err := s.sc.V1Subscriptions.Update(ctx, sub.ID, params)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
 }
